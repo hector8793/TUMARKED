@@ -1,4 +1,4 @@
-name: Build and push backend to ECR
+name: Build, push and deploy backend
 
 on:
   push:
@@ -12,9 +12,11 @@ on:
 env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: tumarked-api
+  ECS_CLUSTER: tumarked-cluster-v2
+  ECS_SERVICE: tumarked-api-task-service-oxl6vnwg
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -35,7 +37,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Construir y subir imagen
+      - name: Construir imagen Docker
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -45,6 +47,25 @@ jobs:
             -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
             ./Back
 
+      - name: Subir imagen a Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
+      - name: Forzar nueva implementación en ECS
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
+
+      - name: Esperar a que el servicio quede estable
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
