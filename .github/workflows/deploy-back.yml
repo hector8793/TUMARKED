@@ -16,7 +16,7 @@ env:
   ECS_SERVICE: tumarked-api-task-service-oxl6vnwg
 
 jobs:
-  deploy:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -33,7 +33,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login en Amazon ECR
+      - name: Iniciar sesión en Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -47,7 +47,7 @@ jobs:
             -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
             ./Back
 
-      - name: Publicar imagen
+      - name: Subir imagen a Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -55,15 +55,17 @@ jobs:
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
-      - name: Forzar nuevo despliegue en ECS
+      - name: Forzar nueva implementación en ECS
         run: |
           aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
-            --force-new-deployment
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
 
-      - name: Esperar despliegue
+      - name: Esperar a que el servicio quede estable
         run: |
           aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_SERVICE
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
