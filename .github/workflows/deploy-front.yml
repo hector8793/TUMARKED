@@ -37,7 +37,7 @@ jobs:
       - name: Compilar frontend
         working-directory: Front
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
       - name: Configurar credenciales AWS
@@ -50,5 +50,5 @@ jobs:
       - name: Publicar frontend en S3
         run: |
           aws s3 sync Front/dist \
-            "s3://${{ vars.FRONTEND_BUCKET }}" \
+            "s3://${{ secrets.FRONTEND_BUCKET }}" \
             --delete
