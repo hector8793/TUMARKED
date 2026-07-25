@@ -44,5 +44,5 @@ jobs:
         working-directory: Back
 
       - name: Ejecutar pruebas del frontend
-        run: npm test -- --run
+        run: npm test -- --ci --runInBand
         working-directory: Front
