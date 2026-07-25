@@ -10,7 +10,14 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
-  app.enableCors({ origin: config.get('FRONTEND_ORIGIN', 'http://localhost:5173') });
+  app.enableCors({
+    // Configuración temporal para diagnosticar CORS en el ambiente desplegado.
+    // Restringir al dominio del frontend antes de la publicación definitiva.
+    origin: '*',
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    credentials: false,
+  });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
 
   const swagger = new DocumentBuilder().setTitle('TUMARKED API').setVersion('1.0').build();
