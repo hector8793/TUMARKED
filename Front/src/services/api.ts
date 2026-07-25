@@ -1,6 +1,7 @@
 import type { Product } from '../models/product';
+import { resolveApiBaseUrl } from './api-url';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+const API_URL = resolveApiBaseUrl(import.meta.env, window.location);
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {

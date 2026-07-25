@@ -1,4 +1,4 @@
-import { resolveApiBaseUrl } from './api';
+import { resolveApiBaseUrl } from './api-url';
 
 const makeEnv = (overrides: Record<string, string> = {}): ImportMetaEnv => ({
   BASE_URL: '/',
