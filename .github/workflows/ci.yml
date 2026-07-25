@@ -1,20 +1,48 @@
 name: CI
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --prefix Back
-      - run: npm ci --prefix Front
-      - run: npm --prefix Back run build
-      - run: npm --prefix Front run build
-      - run: npm --prefix Back test
-      - run: npm --prefix Front test
+          cache-dependency-path: |
+            Back/package-lock.json
+            Front/package-lock.json
+
+      - name: Instalar dependencias del backend
+        run: npm ci
+        working-directory: Back
+
+      - name: Instalar dependencias del frontend
+        run: npm ci
+        working-directory: Front
+
+      - name: Compilar backend
+        run: npm run build
+        working-directory: Back
+
+      - name: Compilar frontend
+        run: npm run build
+        working-directory: Front
+
+      - name: Ejecutar pruebas del backend
+        run: npm test -- --runInBand
+        working-directory: Back
+
+      - name: Ejecutar pruebas del frontend
+        run: npm test -- --run
+        working-directory: Front
