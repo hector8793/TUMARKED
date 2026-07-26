@@ -106,7 +106,10 @@ TUMARKED/
 ├── Back/                   NestJS, TypeORM y PostgreSQL
 ├── Docs/
 │   ├── tumarked_schema.sql
-│   └── limpiar_transacciones.sql
+│   ├── limpiar_transacciones.sql
+│   ├── borrar_productos.sql
+│   ├── cargar_productos.sql
+│   └── adr/
 ├── .github/workflows/      CI y despliegues
 └── README.md
 ```
