@@ -1,135 +1,138 @@
-# TUMARKED — Resumen funcional y técnico
+# TUMARKED
 
-## 1. Descripción
+Aplicación web de ventas con catálogo, checkout, procesamiento de pagos, seguimiento de pedidos y control de inventario.
 
-TUMARKED es una aplicación web de ventas enfocada en un flujo de compra sencillo: consultar productos, seleccionar una cantidad, registrar los datos del cliente y la entrega, revisar el resumen y crear un pedido.
+## Acceso a producción
 
-La aplicación se desarrolla con enfoque **mobile-first**, usando azul como color principal, blanco para superficies y amarillo para etiquetas y elementos destacados.
+| Servicio | URL |
+|---|---|
+| Aplicación web | [http://tumarked.s3-website.us-east-2.amazonaws.com/](http://tumarked.s3-website.us-east-2.amazonaws.com/) |
+| API | [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com) |
+| Health check | [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/api/v1/health](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/api/v1/health) |
+| Swagger | [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/swagger](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/swagger) |
 
-Este documento resume la especificación contenida en `app_v2_parte_1.md` a `app_v2_parte_6.md`, el modelo de `tumarked_schema.sql` y el estado real de la implementación.
+> El ambiente publicado utiliza HTTP. Para un entorno productivo definitivo se recomienda habilitar HTTPS en el frontend y en el Application Load Balancer.
 
-## 2. Alcance actual
+## Descripción y alcance
 
-La versión actual permite:
+TUMARKED permite consultar productos, seleccionar una cantidad, registrar los datos del comprador y la entrega, pagar con tarjeta y consultar el estado del pedido.
 
-- Consultar productos activos desde PostgreSQL.
-- Mostrar precio, descripción, disponibilidad y stock.
-- Seleccionar una cantidad válida.
-- Abrir un formulario de compra en tres pasos.
-- Registrar datos del cliente y dirección de entrega.
-- Capturar datos de tarjeta con máscaras y validaciones visuales.
-- Mostrar el resumen calculado de la compra.
-- Crear un pedido local con estado `PENDING`.
-- Consultar los pedidos recientes y su estado.
-- Enmascarar información personal en la lista de pedidos.
+La versión actual incluye:
 
-No incluye login, registro, carrito con varios productos ni panel administrativo. Esas funciones quedaron fuera del MVP definido en la especificación v2.
+- Catálogo de productos activos con precio, descripción y stock.
+- Interfaz adaptable para escritorio, tableta y celular.
+- Checkout guiado en tres pasos.
+- Validación y formato de datos personales, dirección y tarjeta.
+- Tokenización directa de la tarjeta mediante una pasarela de pagos.
+- Creación, firma y procesamiento del pago desde el backend.
+- Estados `PENDING`, `PROCESSING`, `APPROVED`, `DECLINED` y `ERROR`.
+- Consulta y conciliación del estado de las transacciones.
+- Recepción idempotente de eventos firmados.
+- Confirmación de la entrega y descuento único del inventario al aprobarse el pago.
+- Historial de pedidos con datos personales enmascarados.
 
-## 3. Estado de la integración con Wompi
+El MVP no incluye autenticación de usuarios, carrito con varios productos ni panel administrativo.
 
-Las variables para Wompi Sandbox están preparadas, pero la API de Wompi **todavía no procesa los pagos**.
+## Arquitectura
 
-Actualmente:
-
-```text
-Formulario
-→ validación local
-→ creación de cliente y entrega
-→ creación de transacción PENDING
-→ almacenamiento en PostgreSQL
-```
-
-Pendiente:
+### Infraestructura AWS
 
 ```text
-Tarjeta
-→ tokenización directa en Wompi Sandbox
-→ envío del token al backend
-→ firma de integridad
-→ creación del pago en Wompi
-→ webhook o consulta de estado
-→ APPROVED / DECLINED / ERROR
-→ descuento de stock si queda APPROVED
+GitHub
+   │
+   └── GitHub Actions
+          ├── Frontend ──> Amazon S3 (sitio web estático)
+          │
+          └── Backend ──> Docker ──> Amazon ECR
+                                      │
+                                      └── Amazon ECS Fargate
+                                                 │
+                                                 ▼
+                                      Application Load Balancer
+                                                 │
+                              ┌──────────────────┴──────────────────┐
+                              ▼                                     ▼
+                   Amazon RDS PostgreSQL                  AWS Secrets Manager
 ```
 
-Los datos de tarjeta capturados actualmente no se guardan en Redux, `localStorage`, el backend ni PostgreSQL. Se eliminan del formulario después de crear el checkout.
+Componentes principales:
 
-## 4. Arquitectura
+| Componente | Responsabilidad |
+|---|---|
+| Amazon S3 | Hospedaje del frontend estático |
+| Application Load Balancer | Punto de entrada público para la API |
+| Amazon ECS Fargate | Ejecución del contenedor del backend |
+| Amazon ECR | Almacenamiento de imágenes Docker |
+| Amazon RDS | Base de datos PostgreSQL administrada |
+| AWS Secrets Manager | Gestión de configuración sensible |
+| GitHub Actions | Integración, construcción y despliegue continuo |
 
-El proyecto está separado en dos aplicaciones:
+### Arquitectura de la aplicación
+
+```text
+Navegador
+   │
+   ▼
+React + Redux Toolkit
+   │ HTTP / JSON
+   ▼
+Controladores NestJS
+   │
+   ▼
+Casos de uso
+   │
+   ▼
+Puertos y adaptadores
+   ├── TypeORM ──> PostgreSQL
+   └── Adaptador ──> Pasarela de pagos
+```
+
+El backend utiliza una arquitectura hexagonal inicial:
+
+```text
+presentation/      Controladores HTTP y DTO
+application/       Casos de uso y servicios de aplicación
+domain/            Contratos y puertos
+infrastructure/    Persistencia y adaptadores externos
+```
+
+TypeORM tiene `synchronize: false`; el esquema se administra mediante SQL para evitar cambios automáticos en la base de datos.
+
+### Estructura del repositorio
 
 ```text
 TUMARKED/
 ├── Front/                  React, Vite, TypeScript y SCSS
 ├── Back/                   NestJS, TypeORM y PostgreSQL
-├── .github/workflows/      Integración y despliegue
-├── tumarked_schema.sql     Esquema reproducible de PostgreSQL
-└── DOCUMENTACION_TUMARKED.md
+├── Docs/
+│   ├── tumarked_schema.sql
+│   └── limpiar_transacciones.sql
+├── .github/workflows/      CI y despliegues
+└── README.md
 ```
 
-Cada aplicación tiene su propio `package.json`, `package-lock.json`, `node_modules` y `.gitignore`.
+Front y Back tienen su propio `package.json`, `package-lock.json`, dependencias y configuración de entorno.
 
-### Flujo general
+## Flujo de compra y pago
 
 ```text
-Navegador
-   ↓
-React + Redux
-   ↓ HTTP / JSON
-Controladores NestJS
-   ↓
-Casos de uso
-   ↓
-Puertos y adaptadores / TypeORM
-   ↓
-Amazon RDS PostgreSQL
+1. El usuario selecciona un producto y una cantidad.
+2. El frontend valida los datos personales y de entrega.
+3. La tarjeta se envía directamente a la pasarela para tokenización.
+4. El backend crea cliente, entrega y transacción local PENDING.
+5. El frontend envía al backend únicamente el token temporal.
+6. El backend genera la firma de integridad y solicita el pago.
+7. La transacción pasa a APPROVED, DECLINED, PENDING o ERROR.
+8. El backend concilia cambios mediante consulta o webhook firmado.
+9. Si queda APPROVED, confirma la entrega y descuenta el inventario.
+10. El frontend muestra el resultado y permite consultar el pedido.
 ```
 
-### Frontend
+El inicio del pago utiliza una actualización atómica para evitar solicitudes simultáneas. Los eventos externos tienen control de idempotencia para impedir su procesamiento duplicado.
 
-Tecnologías principales:
+Los números de tarjeta y el CVC no se almacenan en Redux, `localStorage`, el backend ni PostgreSQL. Después del intento, los campos sensibles se eliminan del formulario.
 
-- React 19.
-- Vite.
-- TypeScript estricto.
-- Redux Toolkit.
-- React Router.
-- SCSS.
-- Jest y React Testing Library.
-
-Rutas disponibles:
-
-| Ruta | Función |
-|---|---|
-| `/` | Catálogo y checkout |
-| `/pedidos` | Historial de pedidos |
-
-El consumo del backend se centraliza en `Front/src/services/api.ts`. Las validaciones reutilizables se encuentran en `Front/src/validators`.
-
-### Backend
-
-Tecnologías principales:
-
-- NestJS.
-- TypeScript.
-- TypeORM.
-- PostgreSQL.
-- Swagger/OpenAPI.
-- Helmet.
-- Jest.
-
-La estructura sigue una arquitectura hexagonal inicial:
-
-```text
-presentation/      Controladores HTTP y DTO
-application/       Casos de uso
-domain/            Entidades y puertos
-infrastructure/    Persistencia y adaptadores TypeORM
-```
-
-Los controladores delegan el trabajo a casos de uso. La sincronización automática de TypeORM está desactivada; el esquema se administra con SQL.
-
-## 5. API disponible
+## API
 
 Prefijo general:
 
@@ -139,42 +142,241 @@ Prefijo general:
 
 | Método | Endpoint | Descripción |
 |---|---|---|
-| `GET` | `/health` | Estado del backend |
+| `GET` | `/health` | Verifica el estado del backend |
 | `GET` | `/products` | Lista productos activos |
 | `GET` | `/products/:id` | Consulta un producto |
-| `GET` | `/products/:id/stock` | Consulta el stock actual |
+| `GET` | `/products/:id/stock` | Consulta su stock actual |
 | `POST` | `/checkouts` | Crea cliente, entrega y transacción pendiente |
-| `GET` | `/transactions` | Lista los pedidos recientes |
+| `GET` | `/transactions` | Lista pedidos recientes |
+| `GET` | `/transactions/:id` | Consulta y concilia una transacción |
+| `POST` | `/transactions/:id/pay` | Procesa un pago con token de tarjeta |
+| `POST` | `/webhooks/payment-provider` | Recibe eventos firmados de la pasarela |
 
-Swagger está disponible en:
+En desarrollo, Swagger está disponible en `http://localhost:3000/swagger`.
 
-```text
-http://localhost:3000/swagger
-```
+## Frontend
 
-## 6. Base de datos
+Tecnologías:
 
-La base de datos utiliza PostgreSQL en Amazon RDS. Los valores monetarios se almacenan como enteros en centavos para evitar errores de precisión.
+- React 19.
+- Vite.
+- TypeScript estricto.
+- Redux Toolkit.
+- React Router.
+- SCSS.
+- Jest y React Testing Library.
 
-Ejemplo:
+Rutas:
+
+| Ruta | Función |
+|---|---|
+| `/` | Catálogo y checkout |
+| `/pedidos` | Historial de pedidos |
+
+El consumo del backend se centraliza en `Front/src/services/api.ts`; la comunicación con el proveedor de pagos está aislada en `Front/src/services/payment-provider.ts`.
+
+## Backend
+
+Tecnologías:
+
+- NestJS.
+- TypeScript.
+- TypeORM.
+- PostgreSQL.
+- Swagger/OpenAPI.
+- Helmet.
+- Jest.
+
+Los controladores delegan la lógica a casos de uso. La persistencia y la comunicación con servicios externos se implementan mediante adaptadores reemplazables.
+
+## Base de datos
+
+La aplicación utiliza PostgreSQL en Amazon RDS. Los importes monetarios se almacenan como enteros en centavos para evitar errores de precisión:
 
 ```text
 159.900 COP = 15.990.000 centavos
 ```
 
-### Tablas principales
+El esquema reproducible está en `Docs/tumarked_schema.sql`.
 
-| Tabla | Responsabilidad |
+### Relaciones principales
+
+```text
+customers
+   ├── deliveries
+   └── transactions
+          ├── transaction_items ──> products
+          ├── transaction_status_history
+          ├── payment_events
+          ├── stock_movements ──> products
+          └── idempotency_keys
+```
+
+### Diccionario de datos
+
+#### `products`
+
+Catálogo y disponibilidad de productos.
+
+| Campo | Descripción |
 |---|---|
-| `products` | Catálogo, precio, stock y disponibilidad |
-| `customers` | Datos básicos del comprador |
-| `deliveries` | Dirección y estado de entrega |
-| `transactions` | Estado y valores históricos del pedido |
-| `transaction_items` | Productos incluidos en la transacción |
-| `payment_events` | Eventos de Wompi e idempotencia del webhook |
-| `transaction_status_history` | Historial de cambios de estado |
-| `stock_movements` | Auditoría de movimientos de inventario |
-| `idempotency_keys` | Protección frente a solicitudes repetidas |
+| `id` | Identificador único |
+| `sku` | Código único del producto |
+| `name` | Nombre del producto |
+| `description` | Descripción comercial |
+| `price_in_cents` | Precio en centavos |
+| `stock` | Unidades disponibles |
+| `image_url` | URL de la imagen |
+| `active` | Disponibilidad en el catálogo |
+| `version` | Versión para control de cambios |
+| `created_at` | Fecha de creación |
+| `updated_at` | Fecha de actualización |
+
+#### `customers`
+
+Datos básicos del comprador.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `first_name` | Nombre |
+| `last_name` | Apellido |
+| `email` | Correo electrónico |
+| `phone` | Número de contacto |
+| `created_at` | Fecha de creación |
+| `updated_at` | Fecha de actualización |
+
+#### `deliveries`
+
+Dirección y seguimiento de la entrega.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `customer_id` | Cliente relacionado |
+| `address` | Dirección de entrega |
+| `city` | Ciudad |
+| `department` | Departamento |
+| `postal_code` | Código postal |
+| `instructions` | Indicaciones adicionales |
+| `status` | Estado de la entrega |
+| `confirmed_at` | Fecha de confirmación |
+| `shipped_at` | Fecha de envío |
+| `delivered_at` | Fecha de entrega |
+| `created_at` | Fecha de creación |
+| `updated_at` | Fecha de actualización |
+
+#### `transactions`
+
+Información financiera y estado del pedido.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `reference` | Referencia única del pedido |
+| `customer_id` | Cliente relacionado |
+| `delivery_id` | Entrega asociada |
+| `status` | Estado local |
+| `currency` | Moneda |
+| `subtotal_in_cents` | Subtotal en centavos |
+| `base_fee_in_cents` | Tarifa base |
+| `delivery_fee_in_cents` | Costo de entrega |
+| `total_in_cents` | Total del pedido |
+| `provider_transaction_id` | Identificador en la pasarela |
+| `provider_status` | Estado informado por la pasarela |
+| `payment_method_type` | Medio de pago |
+| `installments` | Número de cuotas |
+| `failure_code` | Código del error |
+| `failure_reason` | Descripción del error |
+| `stock_applied` | Indica si se descontó inventario |
+| `delivery_confirmed` | Indica si se confirmó la entrega |
+| `approved_at` | Fecha de aprobación |
+| `declined_at` | Fecha de rechazo |
+| `processed_at` | Fecha de procesamiento |
+| `created_at` | Fecha de creación |
+| `updated_at` | Fecha de actualización |
+
+#### `transaction_items`
+
+Detalle histórico de los productos comprados.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `transaction_id` | Transacción relacionada |
+| `product_id` | Producto relacionado |
+| `product_sku` | Copia histórica del SKU |
+| `product_name` | Copia histórica del nombre |
+| `unit_price_in_cents` | Precio unitario |
+| `quantity` | Cantidad comprada |
+| `line_total_in_cents` | Total de la línea |
+| `created_at` | Fecha de creación |
+
+#### `payment_events`
+
+Eventos recibidos desde la pasarela y control de procesamiento.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `provider_event_id` | Identificador único del evento |
+| `transaction_id` | Transacción local |
+| `provider_transaction_id` | Identificador de la pasarela |
+| `event_type` | Tipo de evento |
+| `signature_valid` | Resultado de validar la firma |
+| `payload` | Contenido JSON recibido |
+| `processing_error` | Error de procesamiento |
+| `processed` | Indica si fue procesado |
+| `processed_at` | Fecha de procesamiento |
+| `received_at` | Fecha de recepción |
+| `created_at` | Fecha de creación |
+
+#### `transaction_status_history`
+
+Auditoría de los cambios de estado.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `transaction_id` | Transacción relacionada |
+| `previous_status` | Estado anterior |
+| `new_status` | Estado nuevo |
+| `source` | Origen del cambio |
+| `reason` | Motivo |
+| `metadata` | Información adicional |
+| `created_at` | Fecha de creación |
+
+#### `stock_movements`
+
+Auditoría de los cambios de inventario.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `product_id` | Producto relacionado |
+| `transaction_id` | Transacción que originó el movimiento |
+| `movement_type` | Tipo de movimiento |
+| `quantity` | Variación del inventario |
+| `stock_before` | Inventario anterior |
+| `stock_after` | Inventario resultante |
+| `reason` | Motivo |
+| `created_at` | Fecha de creación |
+
+#### `idempotency_keys`
+
+Protección frente a solicitudes repetidas.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `idempotency_key` | Clave única de idempotencia |
+| `operation` | Operación protegida |
+| `request_hash` | Hash de la solicitud |
+| `transaction_id` | Transacción relacionada |
+| `response_status` | Código HTTP almacenado |
+| `response_body` | Respuesta almacenada |
+| `expires_at` | Fecha de expiración |
+| `created_at` | Fecha de creación |
 
 ### Estados
 
@@ -192,106 +394,125 @@ PENDING, CONFIRMED, PREPARING,
 SHIPPED, DELIVERED, CANCELLED
 ```
 
-### Inventario
+### Inventario y limpieza de pruebas
 
-`tumarked_schema.sql` incluye la función `apply_approved_sale_stock`. Esta bloquea el producto, verifica existencias, descuenta el stock y registra el movimiento dentro de una transacción SQL.
+La función `apply_approved_sale_stock` bloquea el producto, valida existencias, descuenta el stock y registra el movimiento dentro de una misma transacción SQL.
 
-La restricción única de `stock_movements` evita descontar dos veces el inventario para la misma transacción. Esta función está preparada, pero todavía debe conectarse al resultado aprobado de Wompi.
+Una restricción única impide descontar dos veces el mismo producto para una transacción. El script `Docs/limpiar_transacciones.sql` elimina los datos transaccionales de desarrollo y restaura el inventario sin borrar productos ni clientes. No se ejecuta automáticamente.
 
-## 7. Seguridad
+## Seguridad
 
-Medidas incorporadas:
-
-- Variables sensibles en archivos `.env` ignorados por Git.
-- Solo la llave pública de Wompi puede utilizarse en el frontend.
-- Validación y limpieza de DTO mediante `ValidationPipe`.
-- Campos no declarados rechazados por el backend.
+- Variables sensibles almacenadas fuera del repositorio.
+- Solo la llave pública de pagos se expone al frontend.
+- Tarjetas tokenizadas directamente con la pasarela.
+- DTO validados y campos desconocidos rechazados mediante `ValidationPipe`.
 - Cabeceras de seguridad mediante Helmet.
-- CORS restringido al origen configurado.
-- Conexión SSL con PostgreSQL configurable.
-- Datos personales enmascarados en el listado público de pedidos.
-- TypeORM con `synchronize: false`.
+- Conexión SSL configurable con PostgreSQL.
+- Información personal enmascarada en el listado de pedidos.
+- TypeORM configurado con `synchronize: false`.
+- Firmas de integridad para crear pagos.
+- Verificación de firmas e idempotencia para eventos externos.
 
-En producción se debe utilizar la CA oficial de Amazon RDS y guardar credenciales en AWS Secrets Manager.
+CORS permanece abierto temporalmente durante las pruebas de despliegue. Antes de cerrar producción debe restringirse al dominio del frontend mediante `FRONTEND_ORIGIN`.
 
-## 8. Ejecución local
+También se recomienda instalar la CA oficial de Amazon RDS y mantener credenciales y secretos en AWS Secrets Manager.
+
+## Ejecución local
 
 Requiere Node.js 20 o superior.
 
-Instalación:
+### Instalación
 
 ```powershell
 npm.cmd install --prefix Front
 npm.cmd install --prefix Back
 ```
 
-Backend:
+### Backend
 
 ```powershell
-npm.cmd run dev:back
+cd Back
+npm.cmd run run
 ```
 
-Frontend:
+### Frontend
 
 ```powershell
-npm.cmd run dev:front
+cd Front
+npm.cmd run run
 ```
 
-Direcciones locales:
+Servicios locales:
 
-```text
-Frontend: http://localhost:5173
-Backend:  http://localhost:3000/api/v1
-Swagger:  http://localhost:3000/swagger
-```
+| Servicio | URL |
+|---|---|
+| Frontend | `http://localhost:5173` |
+| API | `http://localhost:3000/api/v1` |
+| Swagger | `http://localhost:3000/swagger` |
 
-## 9. Variables de entorno
+## Variables de entorno
 
-Los ejemplos se encuentran en:
+Los ejemplos están en `Front/.env.example` y `Back/.env.example`. Los archivos `.env` reales están ignorados por Git.
 
-```text
-Front/.env.example
-Back/.env.example
-```
+Variables principales:
 
-Los archivos `.env` reales nunca deben subirse al repositorio. El usuario y la contraseña del portal web de Wompi tampoco forman parte de las variables de ejecución de la aplicación.
+| Aplicación | Variable | Uso |
+|---|---|---|
+| Front | `VITE_API_URL` | URL pública del backend |
+| Front | `VITE_PAYMENT_API_URL` | URL del proveedor de pagos |
+| Front | `VITE_PAYMENT_PUBLIC_KEY` | Llave pública para tokenización |
+| Back | `DATABASE_URL` | Conexión PostgreSQL |
+| Back | `FRONTEND_ORIGIN` | Origen permitido por CORS |
+| Back | `PAYMENT_API_URL` | URL del proveedor de pagos |
+| Back | `PAYMENT_PRIVATE_KEY` | Llave privada |
+| Back | `PAYMENT_EVENTS_SECRET` | Validación de eventos |
+| Back | `PAYMENT_INTEGRITY_SECRET` | Firma de integridad |
 
-## 10. Pruebas y construcción
+Las credenciales del portal del proveedor no son variables de ejecución y nunca deben almacenarse en el repositorio.
 
-Comandos disponibles:
+## Pruebas y construcción
 
 ```powershell
-npm.cmd run build:front
-npm.cmd run build:back
-npm.cmd run test:front
-npm.cmd run test:back
+cd Front
+npm.cmd run build
+npm.cmd run coverage
+
+cd ..\Back
+npm.cmd run build
+npm.cmd run coverage
 ```
 
-Existen pruebas iniciales para formato monetario, algoritmo de Luhn, detección de franquicia y casos de uso. La cobertura global todavía no alcanza el objetivo final del 80 % y debe ampliarse junto con la integración de pagos.
+Las pruebas actuales cubren formato monetario, algoritmo de Luhn, detección de franquicia, criptografía de pagos y casos de uso. La cobertura debe seguir ampliándose hasta superar el objetivo del 80 %.
 
-## 11. Automatización
+## CI/CD
 
-La raíz contiene workflows de GitHub Actions para:
+Los workflows de `.github/workflows` realizan:
 
-- Compilar y ejecutar pruebas.
-- Construir y publicar el backend en Amazon ECR.
-- Construir y publicar el frontend en S3 y actualizar CloudFront.
+### Integración continua
 
-El pipeline del backend publica en ECR las etiquetas correspondientes al SHA del commit y `latest`.
+1. Instalan las dependencias de Front y Back.
+2. Compilan ambas aplicaciones.
+3. Ejecutan sus pruebas y reportes de cobertura.
 
-## 12. Próximos pasos prioritarios
+### Despliegue del backend
 
-1. Tokenizar la tarjeta directamente con Wompi Sandbox.
-2. Crear el endpoint de procesamiento de pago.
-3. Generar y validar la firma de integridad.
-4. Implementar el webhook firmado e idempotente.
-5. Actualizar el estado definitivo del pedido.
-6. Aplicar el descuento de stock únicamente en `APPROVED`.
-7. Confirmar la entrega después de la aprobación.
-8. Recuperar el progreso no sensible después de recargar.
-9. Completar pruebas hasta superar el 80 %.
-10. Terminar infraestructura AWS y despliegue.
+1. Construyen la imagen Docker.
+2. Publican las etiquetas del SHA y `latest` en Amazon ECR.
+3. Fuerzan una nueva implementación en ECS Fargate.
+4. Esperan que el servicio quede estable.
 
-## 13. Aclaración final
+### Despliegue del frontend
 
-La pantalla de pedidos refleja las transacciones locales almacenadas en PostgreSQL. Un pedido `PENDING` confirma que el checkout fue creado, pero no representa todavía un pago aprobado por Wompi.
+1. Compilan Vite con las variables públicas configuradas en GitHub Secrets.
+2. Sincronizan el contenido de `Front/dist` con el bucket de Amazon S3.
+
+## Consideraciones pendientes
+
+1. Habilitar HTTPS para el sitio y la API.
+2. Restringir CORS al dominio definitivo del frontend.
+3. Aumentar la cobertura automatizada hasta superar el 80 %.
+4. Configurar la CA oficial de Amazon RDS.
+5. Añadir observabilidad y alarmas para pagos y webhooks.
+6. Incorporar recuperación controlada de transacciones interrumpidas en `PROCESSING`.
+
+Un pedido `PENDING` confirma que el checkout fue creado, pero no representa un pago aprobado. El estado definitivo debe consultarse en el historial o mediante `GET /transactions/:id`.

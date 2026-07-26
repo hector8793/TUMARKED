@@ -17,6 +17,12 @@ export const api = {
   createCheckout: (body: CreateCheckoutRequest) =>
     request<CheckoutResponse>('/checkouts', { method: 'POST', body: JSON.stringify(body) }),
   listOrders: () => request<Order[]>('/transactions'),
+  processPayment: (transactionId: string, body: ProcessPaymentRequest) =>
+    request<PaymentResponse>(`/transactions/${transactionId}/pay`, {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  getTransaction: (transactionId: string) =>
+    request<TransactionDetail>(`/transactions/${transactionId}`),
 };
 
 export interface CreateCheckoutRequest {
@@ -48,4 +54,30 @@ export interface CheckoutResponse {
   amounts: {
     subtotal: number; baseFee: number; deliveryFee: number; total: number; currency: 'COP';
   };
+}
+
+export interface ProcessPaymentRequest {
+  cardToken: string;
+  installments: number;
+  acceptanceToken: string;
+  acceptPersonalAuth: string;
+}
+
+export interface PaymentResponse {
+  transactionId: string;
+  reference: string;
+  providerTransactionId: string;
+  status: Order['status'];
+  message: string | null;
+}
+
+export interface TransactionDetail {
+  id: string;
+  reference: string;
+  status: Order['status'];
+  providerTransactionId: string | null;
+  providerStatus: string | null;
+  totalInCents: number;
+  currency: string;
+  failureReason: string | null;
 }

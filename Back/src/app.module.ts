@@ -12,6 +12,14 @@ import { HealthController } from './presentation/health.controller';
 import { ProductsController } from './presentation/products.controller';
 import { CheckoutsController } from './presentation/checkouts.controller';
 import { TransactionsController } from './presentation/transactions.controller';
+import { WebhooksController } from './presentation/webhooks.controller';
+import { ProcessPaymentUseCase } from './application/use-cases/process-payment.use-case';
+import { GetTransactionUseCase } from './application/use-cases/get-transaction.use-case';
+import { HandlePaymentEventUseCase } from './application/use-cases/handle-payment-event.use-case';
+import { PaymentCryptoService } from './application/services/payment-crypto.service';
+import { TransactionStatusService } from './application/services/transaction-status.service';
+import { PAYMENT_GATEWAY } from './domain/ports/payment-gateway.port';
+import { PaymentProviderAdapter } from './infrastructure/payment-provider/payment-provider.adapter';
 
 @Module({
   imports: [
@@ -34,12 +42,22 @@ import { TransactionsController } from './presentation/transactions.controller';
     }),
     TypeOrmModule.forFeature([ProductOrmEntity]),
   ],
-  controllers: [ProductsController, CheckoutsController, TransactionsController, HealthController],
+  controllers: [
+    ProductsController, CheckoutsController, TransactionsController,
+    WebhooksController, HealthController,
+  ],
   providers: [
     ListProductsUseCase,
     GetProductUseCase,
     CreateCheckoutUseCase,
     ListTransactionsUseCase,
+    ProcessPaymentUseCase,
+    GetTransactionUseCase,
+    HandlePaymentEventUseCase,
+    PaymentCryptoService,
+    TransactionStatusService,
+    PaymentProviderAdapter,
+    { provide: PAYMENT_GATEWAY, useExisting: PaymentProviderAdapter },
     TypeOrmProductRepository,
     { provide: PRODUCT_REPOSITORY, useExisting: TypeOrmProductRepository },
   ],
