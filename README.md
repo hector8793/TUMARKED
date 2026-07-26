@@ -106,12 +106,24 @@ TUMARKED/
 ├── Back/                   NestJS, TypeORM y PostgreSQL
 ├── Docs/
 │   ├── tumarked_schema.sql
-│   └── limpiar_transacciones.sql
+│   ├── limpiar_transacciones.sql
+│   ├── borrar_productos.sql
+│   ├── cargar_productos.sql
+│   └── adr/
 ├── .github/workflows/      CI y despliegues
 └── README.md
 ```
 
 Front y Back tienen su propio `package.json`, `package-lock.json`, dependencias y configuración de entorno.
+
+### Decisiones de arquitectura
+
+Las decisiones relevantes y sus consecuencias están documentadas en:
+
+- `Docs/adr/001-arquitectura-hexagonal.md`
+- `Docs/adr/002-tokenizacion-de-tarjetas.md`
+- `Docs/adr/003-idempotencia-de-pagos.md`
+- `Docs/adr/004-consistencia-de-inventario.md`
 
 ## Flujo de compra y pago
 
@@ -166,6 +178,35 @@ Tecnologías:
 - SCSS.
 - Jest y React Testing Library.
 
+### Arquitectura del frontend
+
+El frontend está organizado por responsabilidad:
+
+```text
+src/
+├── app/          Configuración de Redux, store y hooks tipados
+├── components/   Componentes reutilizables y flujo de checkout
+├── features/     Estado global dividido por funcionalidad
+├── models/       Tipos del dominio consumidos por la interfaz
+├── pages/        Pantallas asociadas a las rutas
+├── services/     Acceso a la API y al proveedor de pagos
+├── styles/       Paleta, componentes visuales y diseño adaptable
+├── utils/        Funciones puras reutilizables
+├── validators/   Reglas de validación independientes
+└── test/         Configuración de pruebas
+```
+
+```text
+Página o componente
+      │
+      ├── Redux Toolkit ──> estado global de productos
+      ├── estado local ───> formulario y pasos del checkout
+      ├── services/api ───> backend
+      └── payment-provider ──> tokenización de tarjeta
+```
+
+Redux se utiliza para información compartida, mientras que los datos temporales del formulario permanecen en el componente. Esta separación evita guardar información sensible de tarjeta en el estado global.
+
 Rutas:
 
 | Ruta | Función |
@@ -174,6 +215,19 @@ Rutas:
 | `/pedidos` | Historial de pedidos |
 
 El consumo del backend se centraliza en `Front/src/services/api.ts`; la comunicación con el proveedor de pagos está aislada en `Front/src/services/payment-provider.ts`.
+
+### Buenas prácticas del frontend
+
+- TypeScript estricto y modelos tipados para productos, pedidos y respuestas HTTP.
+- URLs y llaves públicas proporcionadas mediante variables de entorno.
+- Acceso HTTP centralizado para evitar llamadas dispersas en los componentes.
+- Integración de pagos aislada detrás de un servicio específico.
+- Estado global limitado a información compartida; formularios manejados localmente.
+- Validaciones y utilidades puras separadas de la presentación.
+- Datos de tarjeta tokenizados sin almacenarlos en Redux o `localStorage`.
+- Componentes con etiquetas semánticas, mensajes `role="alert"` y estados de foco visibles.
+- SCSS basado en variables de color, espaciado consistente y diseño responsive.
+- Pruebas unitarias para servicios, formato monetario y validación de tarjetas.
 
 ## Backend
 
@@ -187,7 +241,61 @@ Tecnologías:
 - Helmet.
 - Jest.
 
-Los controladores delegan la lógica a casos de uso. La persistencia y la comunicación con servicios externos se implementan mediante adaptadores reemplazables.
+### Arquitectura del backend
+
+El backend aplica una arquitectura hexagonal inicial con inyección de dependencias:
+
+```text
+src/
+├── presentation/
+│   ├── controllers    Entrada HTTP y documentación Swagger
+│   └── dto            Validación de solicitudes
+├── application/
+│   ├── use-cases      Reglas y coordinación de cada operación
+│   └── services       Criptografía y actualización de estados
+├── domain/
+│   ├── entities       Modelos independientes
+│   └── ports          Contratos de persistencia y pagos
+└── infrastructure/
+    ├── persistence    Entidades y repositorios TypeORM
+    └── payment-provider
+                       Adaptador de la pasarela de pagos
+```
+
+```text
+Solicitud HTTP
+     │
+     ▼
+Controller + DTO
+     │
+     ▼
+Caso de uso
+     │
+     ├── Puerto de repositorio ──> Adaptador TypeORM
+     ├── Puerto de pagos ────────> Adaptador externo
+     └── DataSource ─────────────> Operaciones SQL transaccionales
+```
+
+Los controladores se limitan a recibir y validar solicitudes. Los casos de uso coordinan la lógica, y el proveedor de pagos se consume mediante un puerto para que pueda reemplazarse sin modificar la capa de aplicación.
+
+La separación hexagonal está más desarrollada en productos y pagos. Algunas operaciones transaccionales todavía utilizan `DataSource` directamente desde la capa de aplicación; es una decisión práctica del MVP y un punto posible de refactorización hacia repositorios específicos.
+
+### Buenas prácticas del backend
+
+- DTO con `class-validator`, transformación de tipos y rechazo de campos desconocidos.
+- Inyección de dependencias de NestJS y contratos mediante símbolos.
+- Adaptador externo desacoplado de los casos de uso.
+- Variables sensibles obtenidas desde `ConfigService`.
+- TypeORM con `synchronize: false` y esquema SQL versionado.
+- Operaciones críticas de aprobación e inventario dentro de transacciones de base de datos.
+- Actualización atómica antes de iniciar un pago para reducir cobros simultáneos.
+- Descuento idempotente de inventario mediante restricción única.
+- Validación criptográfica de firmas de integridad y eventos.
+- Registro y deduplicación de eventos externos.
+- Normalización e historial de estados de transacción.
+- Tarjetas representadas únicamente mediante tokens temporales.
+- Helmet, configuración CORS explícita, prefijo versionado y documentación Swagger.
+- Pruebas unitarias para criptografía y casos de uso.
 
 ## Base de datos
 
