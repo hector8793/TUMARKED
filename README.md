@@ -113,6 +113,15 @@ TUMARKED/
 
 Front y Back tienen su propio `package.json`, `package-lock.json`, dependencias y configuración de entorno.
 
+### Decisiones de arquitectura
+
+Las decisiones relevantes y sus consecuencias están documentadas en:
+
+- `Docs/adr/001-arquitectura-hexagonal.md`
+- `Docs/adr/002-tokenizacion-de-tarjetas.md`
+- `Docs/adr/003-idempotencia-de-pagos.md`
+- `Docs/adr/004-consistencia-de-inventario.md`
+
 ## Flujo de compra y pago
 
 ```text
