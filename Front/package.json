@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "run": "vite",
     "build": "tsc -b && vite build",
-    "test": "jest --coverage",
+    "coverage": "jest --coverage",
     "lint": "eslint src --max-warnings=0"
   },
   "dependencies": {

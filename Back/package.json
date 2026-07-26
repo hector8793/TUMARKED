@@ -5,8 +5,8 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
-    "start:dev": "nest start --watch",
-    "test": "jest --coverage",
+    "run": "nest start --watch",
+    "coverage": "jest --coverage",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
     "db:migrate": "node scripts/run-sql.mjs ../tumarked_schema.sql",
     "db:seed": "node scripts/run-sql.mjs scripts/seed.sql"

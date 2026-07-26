@@ -38,6 +38,8 @@ jobs:
         working-directory: Front
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_PAYMENT_API_URL: ${{ secrets.VITE_PAYMENT_API_URL }}
+          VITE_PAYMENT_PUBLIC_KEY: ${{ secrets.VITE_PAYMENT_PUBLIC_KEY }}
         run: npm run build
 
       - name: Configurar credenciales AWS
