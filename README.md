@@ -125,6 +125,7 @@ Las decisiones relevantes y sus consecuencias están documentadas en:
 - `Docs/adr/002-tokenizacion-de-tarjetas.md`
 - `Docs/adr/003-idempotencia-de-pagos.md`
 - `Docs/adr/004-consistencia-de-inventario.md`
+- `Docs/adr/005-railway-oriented-programming.md`
 
 ## Flujo de compra y pago
 
@@ -167,7 +168,10 @@ Prefijo general:
 | `POST` | `/transactions/:id/pay` | Procesa un pago con token de tarjeta |
 | `POST` | `/webhooks/payment-provider` | Recibe eventos firmados de la pasarela |
 
-En desarrollo, Swagger está disponible en `http://localhost:3000/swagger`.
+Swagger está disponible en:
+
+- Producción: [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/swagger](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/swagger)
+- Desarrollo: `http://localhost:3000/swagger`
 
 Swagger es la documentación principal de la API. Incluye ejemplos de solicitudes y respuestas, parámetros UUID, validaciones, códigos de error y el flujo servidor a servidor del webhook. Los tokens mostrados son ficticios y deben reemplazarse por tokens generados en el ambiente de pruebas.
 
@@ -284,6 +288,21 @@ Caso de uso
 Los controladores se limitan a recibir y validar solicitudes. Los casos de uso coordinan la lógica, y el proveedor de pagos se consume mediante un puerto para que pueda reemplazarse sin modificar la capa de aplicación.
 
 La separación hexagonal está más desarrollada en productos y pagos. Algunas operaciones transaccionales todavía utilizan `DataSource` directamente desde la capa de aplicación; es una decisión práctica del MVP y un punto posible de refactorización hacia repositorios específicos.
+
+### Railway Oriented Programming
+
+ROP se aplica progresivamente para evitar cambios de alto riesgo. `GetProductUseCase` devuelve `Result<Product, ApplicationError>` en lugar de lanzar una excepción HTTP. La capa de presentación convierte el resultado fallido en el mismo contrato `404 PRODUCT_NOT_FOUND`.
+
+```text
+Repositorio de productos
+        │
+        ▼
+GetProductUseCase
+   ├── success(product) ──> respuesta 200
+   └── failure(error) ────> mapper HTTP ──> respuesta 404
+```
+
+La implementación y sus consecuencias están detalladas en `Docs/adr/005-railway-oriented-programming.md`.
 
 ### Buenas prácticas del backend
 
@@ -602,7 +621,7 @@ Resultados actuales:
 | Proyecto | Pruebas | Statements | Branches | Functions | Lines |
 |---|---:|---:|---:|---:|---:|
 | Front | 27 | 87.11 % | 82.72 % | 89.02 % | 89.58 % |
-| Back | 34 | 98.37 % | 88.88 % | 96.55 % | 99.61 % |
+| Back | 35 | 98.45 % | 89.18 % | 96.77 % | 99.63 % |
 
 Jest exige un mínimo global de 80 % en las cuatro métricas. Si una cobertura cae por debajo del umbral, el pipeline de integración continua falla.
 
