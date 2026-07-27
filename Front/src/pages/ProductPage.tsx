@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { CheckoutModal } from "../components/CheckoutModal";
@@ -12,13 +12,15 @@ export function ProductPage() {
   const { items, status, error } = useAppSelector((state) => state.products);
   const [quantity, setQuantity] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Product | null>(null);
+  const recoveryAttempted = useRef(false);
 
   useEffect(() => {
     void dispatch(fetchProducts());
   }, [dispatch]);
 
   useEffect(() => {
-    if (status !== "succeeded" || selected) return;
+    if (status !== "succeeded" || selected || recoveryAttempted.current) return;
+    recoveryAttempted.current = true;
     const progress = loadCheckoutProgress();
     const product = items.find((item) => item.id === progress?.productId);
     if (!product || !progress) return;

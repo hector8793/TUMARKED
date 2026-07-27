@@ -124,6 +124,23 @@ describe("CheckoutModal", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Escribe tu nombre");
   });
 
+  it("closes from the close button", () => {
+    const onClose = jest.fn();
+    render(<CheckoutModal product={product} quantity={1} onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses application validation instead of the browser email validation", () => {
+    const { container } = render(
+      <CheckoutModal product={product} quantity={1} onClose={jest.fn()} />,
+    );
+
+    expect(container.querySelector("form")).toHaveAttribute("novalidate");
+  });
+
   it("validates each customer and card section before preparing the payment", async () => {
     const { container } = render(
       <CheckoutModal product={product} quantity={1} onClose={jest.fn()} />,
