@@ -301,7 +301,7 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
             </button>
           </div>
         ) : (
-          <form onSubmit={confirm}>
+          <form onSubmit={confirm} noValidate>
             <p className="eyebrow">COMPRA SEGURA · PASO {step} DE 3</p>
             <h2 id="checkout-title">
               {step === 1
