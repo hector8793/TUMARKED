@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { Product } from "../models/product";
 import {
   api,
@@ -11,6 +11,13 @@ import {
   paymentProvider,
   type PaymentAcceptance,
 } from "../services/payment-provider";
+import {
+  clearCheckoutProgress,
+  loadCheckoutProgress,
+  safeCheckoutForm,
+  saveCheckoutProgress,
+  type CheckoutProgress,
+} from "../services/checkout-progress";
 
 interface Props {
   product: Product;
@@ -41,8 +48,19 @@ type CheckoutResult = CheckoutResponse & {
 };
 
 export function CheckoutModal({ product, quantity, onClose }: Props) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState(emptyForm);
+  const [savedProgress, setSavedProgress] = useState<CheckoutProgress | null>(
+    () => {
+      const progress = loadCheckoutProgress();
+      return progress?.productId === product.id ? progress : null;
+    },
+  );
+  const [step, setStep] = useState<1 | 2 | 3>(
+    savedProgress?.checkout ? 2 : (savedProgress?.step ?? 1),
+  );
+  const [form, setForm] = useState({
+    ...emptyForm,
+    ...(savedProgress?.form ?? {}),
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckoutResult | null>(null);
@@ -52,6 +70,45 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
   const brand = useMemo(() => cardBrand(form.cardNumber), [form.cardNumber]);
   const update = (name: keyof typeof form, value: string) =>
     setForm({ ...form, [name]: value });
+  const finish = () => {
+    clearCheckoutProgress();
+    onClose();
+  };
+
+  useEffect(() => {
+    saveCheckoutProgress({
+      productId: product.id,
+      quantity,
+      step: step === 1 ? 1 : 2,
+      form: safeCheckoutForm(form),
+      checkout: savedProgress?.checkout,
+    });
+  }, [form, product.id, quantity, savedProgress?.checkout, step]);
+
+  useEffect(() => {
+    const checkout = savedProgress?.checkout;
+    if (!checkout) return;
+    let active = true;
+
+    void api
+      .getTransaction(checkout.transactionId)
+      .then((transaction) => {
+        if (!active || transaction.status === "PENDING") return;
+        setResult({
+          ...checkout,
+          status: transaction.status,
+          providerTransactionId: transaction.providerTransactionId ?? undefined,
+          message: transaction.failureReason,
+        });
+      })
+      .catch(() => {
+        // El usuario puede reintentar manualmente si la conciliación no está disponible.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [savedProgress?.checkout]);
 
   const validateDetails = () => {
     if (!form.firstName.trim()) return "Escribe tu nombre.";
@@ -151,7 +208,19 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
         expYear: expiry[1],
         cardHolder: form.cardHolder,
       });
-      const checkout = await api.createCheckout(payload);
+      const checkout =
+        savedProgress?.checkout ?? (await api.createCheckout(payload));
+      if (!savedProgress?.checkout) {
+        const progress: CheckoutProgress = {
+          productId: product.id,
+          quantity,
+          step: 2,
+          form: safeCheckoutForm(form),
+          checkout,
+        };
+        saveCheckoutProgress(progress);
+        setSavedProgress(progress);
+      }
       const payment = await api.processPayment(checkout.transactionId, {
         cardToken,
         installments: Number(form.installments),
@@ -233,7 +302,7 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
               Estado: {result.status}.{" "}
               {result.message ?? paymentDescription(result.status)}
             </p>
-            <button className="primary wide" onClick={onClose}>
+            <button className="primary wide" onClick={finish}>
               Volver a productos
             </button>
           </div>
