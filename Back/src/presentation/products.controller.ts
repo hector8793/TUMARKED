@@ -5,6 +5,7 @@ import {
 } from '@nestjs/swagger';
 import { GetProductUseCase } from '../application/use-cases/get-product.use-case';
 import { ListProductsUseCase } from '../application/use-cases/list-products.use-case';
+import { unwrapHttpResult } from './errors/http-error.mapper';
 
 @ApiTags('products')
 @Controller('products')
@@ -55,7 +56,9 @@ export class ProductsController {
     description: 'Producto inexistente',
     schema: { example: { code: 'PRODUCT_NOT_FOUND', message: 'Producto no encontrado' } },
   })
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) { return this.getProduct.execute(id); }
+  async findOne(@Param('id', new ParseUUIDPipe()) id: string) {
+    return unwrapHttpResult(await this.getProduct.execute(id));
+  }
 
   @Get(':id/stock')
   @ApiOperation({ summary: 'Consulta el inventario actual' })
@@ -73,7 +76,7 @@ export class ProductsController {
   @ApiBadRequestResponse({ description: 'El identificador no es un UUID válido' })
   @ApiNotFoundResponse({ description: 'Producto inexistente' })
   async stock(@Param('id', new ParseUUIDPipe()) id: string) {
-    const product = await this.getProduct.execute(id);
+    const product = unwrapHttpResult(await this.getProduct.execute(id));
     return { productId: product.id, stock: product.stock, active: product.active };
   }
 }

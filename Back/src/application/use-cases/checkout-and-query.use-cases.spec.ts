@@ -109,8 +109,17 @@ describe('query use cases', () => {
     };
     const useCase = new GetProductUseCase(products);
 
-    await expect(useCase.execute(product.id)).resolves.toEqual(product);
-    await expect(useCase.execute('missing')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(useCase.execute(product.id)).resolves.toEqual({
+      ok: true,
+      value: product,
+    });
+    await expect(useCase.execute('missing')).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'PRODUCT_NOT_FOUND',
+        message: 'Producto no encontrado',
+      },
+    });
   });
 
   it('maps recent transactions to the public response', async () => {

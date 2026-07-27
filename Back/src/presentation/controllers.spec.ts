@@ -5,6 +5,7 @@ import { HandlePaymentEventUseCase } from '../application/use-cases/handle-payme
 import { ListProductsUseCase } from '../application/use-cases/list-products.use-case';
 import { ListTransactionsUseCase } from '../application/use-cases/list-transactions.use-case';
 import { ProcessPaymentUseCase } from '../application/use-cases/process-payment.use-case';
+import { failure, success } from '../domain/result/result';
 import { CheckoutsController } from './checkouts.controller';
 import { HealthController } from './health.controller';
 import { ProductsController } from './products.controller';
@@ -24,7 +25,16 @@ describe('presentation controllers', () => {
   it('delegates product queries and maps stock', async () => {
     const list = { execute: jest.fn().mockReturnValue(['product']) };
     const get = {
-      execute: jest.fn().mockResolvedValue({ id: 'product-1', stock: 4, active: true }),
+      execute: jest.fn().mockResolvedValue(success({
+        id: 'product-1',
+        sku: 'TM-1',
+        name: 'Producto',
+        description: 'Descripción',
+        priceInCents: 10000,
+        stock: 4,
+        imageUrl: null,
+        active: true,
+      })),
     };
     const controller = new ProductsController(
       list as unknown as ListProductsUseCase,
@@ -39,6 +49,26 @@ describe('presentation controllers', () => {
       productId: 'product-1',
       stock: 4,
       active: true,
+    });
+  });
+
+  it('maps a product application failure to the original HTTP exception', async () => {
+    const controller = new ProductsController(
+      { execute: jest.fn() } as unknown as ListProductsUseCase,
+      {
+        execute: jest.fn().mockResolvedValue(failure({
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Producto no encontrado',
+        })),
+      } as unknown as GetProductUseCase,
+    );
+
+    await expect(controller.findOne('missing')).rejects.toMatchObject({
+      status: 404,
+      response: {
+        code: 'PRODUCT_NOT_FOUND',
+        message: 'Producto no encontrado',
+      },
     });
   });
 
