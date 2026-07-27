@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { CheckoutModal } from "../components/CheckoutModal";
 import { fetchProducts } from "../features/products/productsSlice";
 import type { Product } from "../models/product";
+import { loadCheckoutProgress } from "../services/checkout-progress";
 import { formatCop } from "../utils/money";
 
 export function ProductPage() {
@@ -15,6 +16,15 @@ export function ProductPage() {
   useEffect(() => {
     void dispatch(fetchProducts());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (status !== "succeeded" || selected) return;
+    const progress = loadCheckoutProgress();
+    const product = items.find((item) => item.id === progress?.productId);
+    if (!product || !progress) return;
+    setQuantity((current) => ({ ...current, [product.id]: progress.quantity }));
+    setSelected(product);
+  }, [items, selected, status]);
 
   return (
     <>

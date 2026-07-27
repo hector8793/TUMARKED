@@ -6,6 +6,7 @@ Aplicación web de ventas con catálogo, checkout, procesamiento de pagos, segui
 
 | Servicio | URL |
 |---|---|
+| Repositorio público | [https://github.com/hector8793/TUMARKED](https://github.com/hector8793/TUMARKED) |
 | Aplicación web | [http://tumarked.s3-website.us-east-2.amazonaws.com/](http://tumarked.s3-website.us-east-2.amazonaws.com/) |
 | API | [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com) |
 | Health check | [http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/api/v1/health](http://tumarked-alb-1877790968.us-east-2.elb.amazonaws.com/api/v1/health) |
@@ -144,6 +145,8 @@ El inicio del pago utiliza una actualización atómica para evitar solicitudes s
 
 Los números de tarjeta y el CVC no se almacenan en Redux, `localStorage`, el backend ni PostgreSQL. Después del intento, los campos sensibles se eliminan del formulario.
 
+El progreso recuperable se conserva temporalmente en `sessionStorage`: producto, cantidad, paso, datos del cliente, entrega y, cuando ya existe, el identificador de la transacción. Al refrescar, la aplicación reabre el checkout y consulta el estado en el backend. Nunca se persisten número de tarjeta, CVC, token de tarjeta ni tokens de aceptación.
+
 ## API
 
 Prefijo general:
@@ -165,6 +168,8 @@ Prefijo general:
 | `POST` | `/webhooks/payment-provider` | Recibe eventos firmados de la pasarela |
 
 En desarrollo, Swagger está disponible en `http://localhost:3000/swagger`.
+
+Swagger es la documentación principal de la API. Incluye ejemplos de solicitudes y respuestas, parámetros UUID, validaciones, códigos de error y el flujo servidor a servidor del webhook. Los tokens mostrados son ficticios y deben reemplazarse por tokens generados en el ambiente de pruebas.
 
 ## Frontend
 
@@ -590,7 +595,16 @@ npm.cmd run build
 npm.cmd run coverage
 ```
 
-Las pruebas actuales cubren formato monetario, algoritmo de Luhn, detección de franquicia, criptografía de pagos y casos de uso. La cobertura debe seguir ampliándose hasta superar el objetivo del 80 %.
+Las pruebas cubren componentes, páginas, Redux, recuperación del checkout, validaciones, cliente de pagos, controladores, persistencia, criptografía, webhooks y casos de uso.
+
+Resultados actuales:
+
+| Proyecto | Pruebas | Statements | Branches | Functions | Lines |
+|---|---:|---:|---:|---:|---:|
+| Front | 27 | 87.11 % | 82.72 % | 89.02 % | 89.58 % |
+| Back | 34 | 98.37 % | 88.88 % | 96.55 % | 99.61 % |
+
+Jest exige un mínimo global de 80 % en las cuatro métricas. Si una cobertura cae por debajo del umbral, el pipeline de integración continua falla.
 
 ## CI/CD
 
@@ -618,9 +632,8 @@ Los workflows de `.github/workflows` realizan:
 
 1. Habilitar HTTPS para el sitio y la API.
 2. Restringir CORS al dominio definitivo del frontend.
-3. Aumentar la cobertura automatizada hasta superar el 80 %.
-4. Configurar la CA oficial de Amazon RDS.
-5. Añadir observabilidad y alarmas para pagos y webhooks.
-6. Incorporar recuperación controlada de transacciones interrumpidas en `PROCESSING`.
+3. Configurar la CA oficial de Amazon RDS.
+4. Añadir observabilidad y alarmas para pagos y webhooks.
+5. Incorporar recuperación controlada de transacciones interrumpidas en `PROCESSING`.
 
 Un pedido `PENDING` confirma que el checkout fue creado, pero no representa un pago aprobado. El estado definitivo debe consultarse en el historial o mediante `GET /transactions/:id`.
