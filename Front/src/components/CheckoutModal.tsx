@@ -8,6 +8,11 @@ import {
 import { formatCop } from "../utils/money";
 import { cardBrand, passesLuhn } from "../validators/card";
 import {
+  normalizeColombianPhone,
+  normalizeEmail,
+  validateCheckoutDetails,
+} from "../validators/checkout";
+import {
   paymentProvider,
   type PaymentAcceptance,
 } from "../services/payment-provider";
@@ -110,18 +115,7 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
     };
   }, [savedProgress?.checkout]);
 
-  const validateDetails = () => {
-    if (!form.firstName.trim()) return "Escribe tu nombre.";
-    if (!form.lastName.trim()) return "Escribe tu apellido.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-      return "Escribe un correo electrónico válido.";
-    if (!/^(\+57)?3\d{9}$/.test(normalizePhone(form.phone))) {
-      return "Escribe un celular colombiano válido, por ejemplo 300 123 4567.";
-    }
-    if (!form.address || !form.city || !form.department)
-      return "Completa los datos obligatorios de entrega.";
-    return "";
-  };
+  const validateDetails = () => validateCheckoutDetails(form);
 
   const validateCard = () => {
     const expiry = /^(\d{2})\/(\d{2})$/.exec(form.expiry);
@@ -188,8 +182,8 @@ export function CheckoutModal({ product, quantity, onClose }: Props) {
       customer: {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        email: form.email.trim(),
-        phone: normalizePhone(form.phone),
+        email: normalizeEmail(form.email),
+        phone: normalizeColombianPhone(form.phone),
       },
       delivery: {
         address: form.address,
@@ -590,13 +584,6 @@ function Field({
       />
     </label>
   );
-}
-
-function normalizePhone(value: string) {
-  const compact = value.replace(/[^\d+]/g, "");
-  if (compact.startsWith("0057")) return `+57${compact.slice(4)}`;
-  if (compact.startsWith("57") && compact.length === 12) return `+${compact}`;
-  return compact;
 }
 
 function formatCardNumber(value: string) {
